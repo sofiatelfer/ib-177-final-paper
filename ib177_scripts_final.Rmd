@@ -1,0 +1,127 @@
+---
+title: "Pupfish Digestion: IB177 Final R Script"
+author: "GUT: Pupfish Digestion Group"
+output: html_document
+---
+
+```{r}
+# load in the packages
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(broom)
+library(palmerpenguins) 
+library(patchwork)
+#run if necessary: install.packages(c('tidyverse', 'ggplot', 'readxl', 'broom', 'palmerpenguins', 'patchwork'))
+```
+
+### Gut length and width plots
+
+```{r}
+# clean the data
+mtdt<- read_csv("ib177_meta_data.csv") %>% 
+  filter(measured == "yes") %>%
+  filter(generation != "none") 
+```
+
+```{r}
+# change measurements into log formed to standardize
+log_df<- mtdt %>% mutate(num_gen = as.numeric(gsub("[^0-9]", "", generation))) %>%
+  mutate(type=as.factor(type)) %>%
+  mutate(num_gen=as.factor(num_gen)) %>%
+  mutate(log_SL=log(standard_length)) %>%
+  mutate(log_GL=log(gut_length)) %>%
+  mutate(log_GW=log(gut_width))
+#mutate(condition=as.factor(condition))
+```
+
+```{r}
+#Plotting
+#Plot of Standard Length vs. Gut Length by species
+SLvGL_plot <-ggplot(log_df, aes(x = log_SL, y = log_GL,color=type)) +
+  geom_point(aes(colour=factor(type), size=3, alpha=0.7)) +
+  geom_smooth(method = "lm", se = FALSE,fullrange=TRUE, linewidth=2) +
+  labs(x = "log_SL", y = "log_GL")
+legend_title <- "Species"
+
+#SLvsGL_plot in concatenate format (standardized colors, etc.)
+cSLvsGL_plot<-SLvGL_plot + scale_color_manual(legend_title,labels=c("generalist","lepidophagy","molluscivore"),
+                      values=c("#999999", "#E69F00", "#56B4E9")) + 
+  guides(size=FALSE,alpha=FALSE) + xlab("Logged Standard Length (mm)") + ylab("Logged Gut Length (mm)") +
+  theme(legend.position= "none") + ggtitle("Gut Length") + theme(plot.title=element_text(size=18)) 
+options(repr.plot.width=14, repr.plot.height=8)
+
+#Plot of Standard Length vs. Gut Width by species
+SLvsGW_plot <-ggplot(log_df, aes(x = log_SL, y = log_GW,color=type)) +
+  geom_point(aes(colour=factor(type), size=3, alpha=0.7)) +
+  geom_smooth(method = "lm", se = FALSE, fullrange=TRUE, linewidth=2) +
+  labs(x = "log_SL", y = "log_GW")
+legend_title <- 'Species'
+
+#SLvsGL_plot in concatenate format (standardized colors, etc.)
+cSLvsGW_plot<- SLvsGW_plot + scale_color_manual(legend_title,labels=c("generalist","lepidophagy","molluscivore"),
+                     values=c("#999999", "#E69F00", "#56B4E9")) + 
+  guides(size=FALSE,alpha=FALSE) + xlab("Logged Standard Length (mm)") + ylab("Logged Gut Length (mm)") +
+  ggtitle("Gut Width") + theme(plot.title=element_text(size=18))
+options(repr.plot.width=14, repr.plot.height=8)
+
+concat_plots<-cSLvsGL_plot+cSLvsGW_plot
+ggsave(filename  = 'ib177_plots.png', plot=concat_plots, width = 20, height = 10, units = 'cm', pointsize = 20)
+concat_plots
+```
+
+### AIC Model
+
+```{r}
+#AIC model testing
+
+#model_plain = no relation between measurements and species type
+model_plain<-glm(log_GL~log_SL, data = log_df)
+summary(model_plain)
+#model_sp = species taken into account, but with the same slope
+model_sp<-glm(log_GL~type+log_SL, data = log_df)
+summary(model_sp)
+#model_sp_interact = species taken into account with interaction
+model_sp_interact<-glm(log_GL~type*log_SL, data = log_df)
+summary(model_sp_interact)
+
+AIC(model_plain, model_sp, model_sp_interact)
+```
+
+### Reproducibility
+
+```{r}
+reprod<- read_csv("ib177_meta_data_reproduc.csv") 
+```
+
+```{r}
+linear_regres_standard_length = ggplot(reprod, aes(standard_length_1, standard_length_2)) +
+    geom_point() + 
+    geom_smooth(method = "lm") +
+    ggtitle("Reproducibility: SL")
+
+lm_standard_length <- lm(reprod$standard_length_1 ~ reprod$standard_length_2)
+r_squared_standard_length <- summary(lm_standard_length)$r.squared
+cat("R-squared for standard length:", round(r_squared_standard_length, 3), "\n")
+
+linear_regres_gut_length = ggplot(reprod, aes(gut_length_1, gut_length_2)) +
+    geom_point() + 
+    geom_smooth(method = "lm") +
+    ggtitle("GL")
+
+lm_gut_length <- lm(reprod$gut_length_1 ~ reprod$gut_length_2)
+r_squared_gut_length <- summary(lm_gut_length)$r.squared
+cat("R-squared for gut length:", round(r_squared_gut_length, 3), "\n")
+
+linear_regres_gut_width = ggplot(reprod, aes(gut_width_1, gut_width_2)) +
+    geom_point() + 
+    geom_smooth(method = "lm") +
+    ggtitle("GW")
+
+lm_gut_width <- lm(reprod$gut_width_1 ~ reprod$gut_width_2)
+r_squared_gut_width <- summary(lm_gut_width)$r.squared
+cat("R-squared for gut width:", round(r_squared_gut_width, 3), "\n")
+
+reproducibility_plots <- linear_regres_standard_length + linear_regres_gut_length + linear_regres_gut_width
+reproducibility_plots
+```
